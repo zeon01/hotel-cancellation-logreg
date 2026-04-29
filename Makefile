@@ -20,7 +20,7 @@ setup:
 
 data:
 	uv run python scripts/download_data.py
-	uv run python -c "from cancellation_logreg.data import build_clean_frame; from cancellation_logreg.preprocess import write_processed; write_processed()"
+	uv run python -c "from cancellation_logreg.preprocess import write_processed; write_processed()"
 
 features:
 	uv run python -c "from cancellation_logreg.features import build_feature_frame; build_feature_frame()"

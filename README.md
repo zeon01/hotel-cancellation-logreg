@@ -12,20 +12,25 @@
 - **Problem:** Predict whether a hotel booking will be cancelled, before it cancels — and translate the model into Supply Ops decisions (allotment release, deposit policy, supplier escalation).
 - **Data:** Antonio, Almeida & Nunes (2019) hotel bookings dataset, ~119k rows, 32 columns, two Portuguese hotels, July 2015 – Aug 2017. CC BY 4.0.
 - **Approach:** Time-based split → leakage-audited preprocessing → L2-regularised logistic regression → isotonic calibration → cost-aware threshold selection.
-- **Headline result:** _TODO after Phase 2 — fill in PR-AUC, Brier, lift in top-decile of risk._
+- **Headline result (held-out test, May–Aug 2017):** PR-AUC 0.823, ROC-AUC 0.859, Brier 0.152 (calibrated), top-decile lift 2.44x — at the cost-optimal threshold of 0.14 the model captures 97% of cancellations at 51% precision, costing $2.44 per booking under the toy cost matrix.
 - **What this repo demonstrates:** SQL-equivalent data wrangling in pandas, statistical modelling in `statsmodels`, ML in `scikit-learn`, diagnostic rigor (VIF, calibration, leakage audits), and translation of model output into Supply Ops decisions.
 
 ## Business framing (Supply Ops lens)
 
-_TODO Phase 2: 2–3 paragraphs on who at an OTA would use this, what decision it informs, what the cost of a wrong decision looks like (overbooking, allotment release, rate parity escalation, agent-time misallocation)._
+Cancellation prediction is a Supply Operations decision problem, not just an ML metric.
+At an OTA the model feeds three concrete decisions:
+
+1. **Allotment release.** A long-lead, deposit-free booking from a high-volume distribution channel cancels at multiples of the base rate. Supply Ops uses the predicted-risk score to time how aggressively those allotments are released back to the broader marketplace; releasing too early loses inventory, releasing too late loses revenue when the cancellation lands.
+2. **Deposit-policy targeting.** Among the top engineered features, `has_deposit` is the largest reduction-of-odds coefficient (see `reports/figures/04_top_coefficients_forest.png`). The natural follow-up is an A/B test on requiring partial deposits for the top-risk decile — the model both *identifies* the eligible segment and supplies the sample-size prior for the experiment.
+3. **Supplier-side flagging.** `room_was_changed` and `booking_changes` interact strongly with cancellation; persistent occurrences at specific suppliers are a connectivity / channel-manager signal that warrants escalation through the partner-extranet team rather than treating each booking as an isolated event.
+
+Cost of a wrong decision: a missed cancellation prediction (false negative) leaves a room unsold close to arrival when re-marketing options are limited; an over-eager flag (false positive) burns agent attention on a booking that would have travelled. The toy cost matrix (`cost_fp=$5, cost_fn=$50`) drives the threshold choice because the asymmetry is the central lever — a cheaper agent process or a richer cancellation impact should slide the threshold accordingly. The threshold-sensitivity table in the appendix shows how much that matters.
 
 ## Headline visuals
 
-_TODO Phase 2: embed 3 PNGs from `reports/figures/`._
-
-- `reports/figures/03_calibration_curve.png`
-- `reports/figures/03_pr_curve.png`
-- `reports/figures/04_top_coefficients_forest.png`
+![Precision-Recall](reports/figures/03_pr_curve.png)
+![Calibration curve](reports/figures/03_calibration_curve.png)
+![Top 15 coefficients](reports/figures/04_top_coefficients_forest.png)
 
 ## Reproducing
 
@@ -46,14 +51,29 @@ make all
 
 ## Results
 
-_TODO Phase 2: metrics table, calibration plot, confusion matrix at chosen threshold, business-impact paragraph._
+Headline test metrics (May 2017 – August 2017, n=22,177 bookings):
 
-| Metric | Value |
-| ------ | ----- |
-| PR-AUC (test) | _TODO_ |
-| ROC-AUC (test) | _TODO_ |
-| Brier (test, calibrated) | _TODO_ |
-| Lift @ top-decile risk | _TODO_ |
+| Metric | Value | Notes |
+| ------ | ----- | ----- |
+| PR-AUC | **0.823** | Primary metric — 37% positive class makes this preferable to ROC-AUC |
+| ROC-AUC | 0.859 | |
+| Brier (calibrated) | **0.152** | Isotonic-calibrated via `CalibratedClassifierCV(cv=5)` |
+| Cost-optimal threshold | 0.14 | Selected on validation against `cost_fp=$5, cost_fn=$50` |
+| Precision @ threshold | 0.511 | Half of flagged bookings actually cancel |
+| Recall @ threshold | **0.973** | Catches 97% of cancellations |
+| F1 @ threshold | 0.670 | |
+| Top-decile lift | **2.44x** | 99.1% of the top decile are actual cancellations |
+| Expected cost / row | $2.44 | Down from $4.62 at the naive 0.5 threshold |
+
+Best `C` from `TimeSeriesSplit(n_splits=5)` CV: **0.01** (heaviest regularisation in the
+grid; sklearn's `class_weight='balanced'` already absorbs much of the loss landscape).
+
+**Business reading.** At the cost-optimal threshold of 0.14, the model would surface
+the riskiest ~50% of bookings as candidates for Supply-Ops attention while missing only
+~3% of cancellations. The top decile (10% of inventory) carries 24x the cancellation
+density of the bottom decile — that is the segment where allotment-release timing,
+deposit-policy targeting, and supplier-confirmation calls have the highest marginal
+return.
 
 ## Limitations & honest caveats
 

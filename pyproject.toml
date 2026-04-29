@@ -62,7 +62,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"notebooks/*.py" = ["E402", "F401", "F811"]
+"notebooks/*.py" = ["E402", "E501", "E702", "F401", "F811", "B018", "I001", "PD010", "PD901", "RUF002", "RUF003"]
 "tests/*.py" = ["S101"]
 
 [tool.pytest.ini_options]

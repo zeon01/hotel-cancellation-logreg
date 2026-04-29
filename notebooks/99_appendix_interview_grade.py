@@ -46,9 +46,17 @@ pd.set_option("display.width", 200)
 # %%
 leakage_audit = pd.DataFrame(
     [
-        ("reservation_status", "LEAKAGE", "Encodes the outcome ('Canceled' / 'Check-Out' / 'No-Show'). Dropped."),
+        (
+            "reservation_status",
+            "LEAKAGE",
+            "Encodes the outcome ('Canceled' / 'Check-Out' / 'No-Show'). Dropped.",
+        ),
         ("reservation_status_date", "LEAKAGE", "Cancellation date for cancelled rows. Dropped."),
-        ("country", "PARTIAL", "Confirmed at check-in for non-PT guests; cancelled rows show booking-time entry only. Top-20 + OTHER, disclosed."),
+        (
+            "country",
+            "PARTIAL",
+            "Confirmed at check-in for non-PT guests; cancelled rows show booking-time entry only. Top-20 + OTHER, disclosed.",
+        ),
         ("agent", "OK (post-clean)", "Booking time. ~14% missing -> top-10 + 'missing' bucket."),
         ("company", "OK", "Booking time. ~94% missing -> binary `has_company_id`."),
         ("lead_time", "OK", "Days from booking to arrival; available at booking time."),
@@ -59,11 +67,27 @@ leakage_audit = pd.DataFrame(
         ("booking_changes", "OK", "Pre-arrival changes; can be locked at prediction time."),
         ("required_car_parking_spaces", "OK", "Set at booking time."),
         ("total_of_special_requests", "OK", "Pre-arrival; can be locked."),
-        ("previous_cancellations / previous_bookings_not_canceled", "OK", "Per-customer history at booking time. Smoothed prior_cancel_rate."),
+        (
+            "previous_cancellations / previous_bookings_not_canceled",
+            "OK",
+            "Per-customer history at booking time. Smoothed prior_cancel_rate.",
+        ),
         ("is_repeated_guest", "OK", "Computed from history at booking time."),
-        ("reserved_room_type / assigned_room_type", "OK + signal", "Difference becomes `room_was_changed` feature."),
-        ("hotel / meal / customer_type / adults / children / babies / nights", "OK", "Standard booking attributes."),
-        ("arrival_date_year/month/week_number/day_of_month", "OK", "Replaced by cyclical encodings + arrival_date."),
+        (
+            "reserved_room_type / assigned_room_type",
+            "OK + signal",
+            "Difference becomes `room_was_changed` feature.",
+        ),
+        (
+            "hotel / meal / customer_type / adults / children / babies / nights",
+            "OK",
+            "Standard booking attributes.",
+        ),
+        (
+            "arrival_date_year/month/week_number/day_of_month",
+            "OK",
+            "Replaced by cyclical encodings + arrival_date.",
+        ),
         ("days_in_waiting_list", "OK", "Booking time."),
     ],
     columns=["column", "status", "justification"],
@@ -78,7 +102,9 @@ leakage_audit
 
 # %%
 cis = pd.read_csv(MODELS_DIR / "metric_cis.csv")
-cis["display"] = cis.apply(lambda r: f"{r['mean']:.3f} [{r['ci_lo']:.3f}, {r['ci_hi']:.3f}]", axis=1)
+cis["display"] = cis.apply(
+    lambda r: f"{r['mean']:.3f} [{r['ci_lo']:.3f}, {r['ci_hi']:.3f}]", axis=1
+)
 cis[["metric", "display", "n"]]
 
 # %% [markdown]
@@ -124,7 +150,12 @@ GROUPS = {
     "deposit_signal": ["has_deposit", "deposit_type"],
     "lead_time": ["lead_time", "is_short_lead", "is_long_lead"],
     "room_change": ["room_was_changed"],
-    "history": ["previous_cancellations", "previous_bookings_not_canceled", "prior_cancel_rate", "is_repeated_guest"],
+    "history": [
+        "previous_cancellations",
+        "previous_bookings_not_canceled",
+        "prior_cancel_rate",
+        "is_repeated_guest",
+    ],
     "country_agent": ["country", "agent"],
     "market_segment": ["market_segment", "distribution_channel", "is_corporate"],
 }
@@ -142,12 +173,14 @@ for name, cols in GROUPS.items():
     pipe = build_pipeline(X_fit[keep], C=0.01)
     cal = fit_calibrated(pipe, X_fit[keep], y_fit, cv=3)  # cv=3 for speed in notebook
     p = cal.predict_proba(X_test[keep])[:, 1]
-    ablation_rows.append({
-        "removed_group": name,
-        "n_cols_removed": len(cols),
-        "pr_auc": float(average_precision_score(y_test, p)),
-        "brier": float(brier_score_loss(y_test, p)),
-    })
+    ablation_rows.append(
+        {
+            "removed_group": name,
+            "n_cols_removed": len(cols),
+            "pr_auc": float(average_precision_score(y_test, p)),
+            "brier": float(brier_score_loss(y_test, p)),
+        }
+    )
 ablation = pd.DataFrame(ablation_rows)
 ablation["delta_pr_auc"] = ablation["pr_auc"] - baseline_pr
 ablation["delta_brier"] = ablation["brier"] - baseline_brier
@@ -174,13 +207,32 @@ from imblearn.over_sampling import SMOTENC
 # Easier: drop categoricals, run SMOTE on numerics only, and keep the rest of the
 # pipeline. Demonstrates the calibration degradation cleanly.
 NUMERIC = [
-    "lead_time", "stays_in_weekend_nights", "stays_in_week_nights", "adults",
-    "children", "babies", "previous_cancellations", "previous_bookings_not_canceled",
-    "booking_changes", "days_in_waiting_list", "adr", "required_car_parking_spaces",
-    "total_of_special_requests", "total_nights", "total_guests", "adr_per_person",
-    "arrival_month_sin", "arrival_month_cos", "prior_cancel_rate",
-    "room_was_changed", "is_short_lead", "is_long_lead", "has_deposit",
-    "is_corporate", "has_company_id", "is_likely_group_booking",
+    "lead_time",
+    "stays_in_weekend_nights",
+    "stays_in_week_nights",
+    "adults",
+    "children",
+    "babies",
+    "previous_cancellations",
+    "previous_bookings_not_canceled",
+    "booking_changes",
+    "days_in_waiting_list",
+    "adr",
+    "required_car_parking_spaces",
+    "total_of_special_requests",
+    "total_nights",
+    "total_guests",
+    "adr_per_person",
+    "arrival_month_sin",
+    "arrival_month_cos",
+    "prior_cancel_rate",
+    "room_was_changed",
+    "is_short_lead",
+    "is_long_lead",
+    "has_deposit",
+    "is_corporate",
+    "has_company_id",
+    "is_likely_group_booking",
 ]
 NUMERIC = [c for c in NUMERIC if c in X_fit.columns]
 
@@ -190,10 +242,12 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.pipeline import Pipeline
 
-smote_pipe = Pipeline([
-    ("scaler", StandardScaler()),
-    ("logreg", LogisticRegression(penalty="l2", C=0.01, solver="lbfgs", max_iter=1000)),
-])
+smote_pipe = Pipeline(
+    [
+        ("scaler", StandardScaler()),
+        ("logreg", LogisticRegression(penalty="l2", C=0.01, solver="lbfgs", max_iter=1000)),
+    ]
+)
 
 # Plain
 plain = CalibratedClassifierCV(smote_pipe, method="isotonic", cv=5)
@@ -207,10 +261,20 @@ smote = CalibratedClassifierCV(smote_pipe, method="isotonic", cv=5)
 smote.fit(X_res, y_res)
 proba_smote = smote.predict_proba(X_test[NUMERIC].fillna(0))[:, 1]
 
-smote_table = pd.DataFrame([
-    {"strategy": "class_weight=balanced (default)", "pr_auc": float(average_precision_score(y_test, proba_plain)), "brier": float(brier_score_loss(y_test, proba_plain))},
-    {"strategy": "SMOTE-resampled", "pr_auc": float(average_precision_score(y_test, proba_smote)), "brier": float(brier_score_loss(y_test, proba_smote))},
-])
+smote_table = pd.DataFrame(
+    [
+        {
+            "strategy": "class_weight=balanced (default)",
+            "pr_auc": float(average_precision_score(y_test, proba_plain)),
+            "brier": float(brier_score_loss(y_test, proba_plain)),
+        },
+        {
+            "strategy": "SMOTE-resampled",
+            "pr_auc": float(average_precision_score(y_test, proba_smote)),
+            "brier": float(brier_score_loss(y_test, proba_smote)),
+        },
+    ]
+)
 smote_table
 
 # %% [markdown]
@@ -232,20 +296,28 @@ for penalty, l1_ratio, solver in [
     ("l1", None, "liblinear"),
     ("elasticnet", 0.5, "saga"),
 ]:
-    kwargs = {"penalty": penalty, "C": 0.01, "solver": solver, "max_iter": 2000, "class_weight": "balanced"}
+    kwargs = {
+        "penalty": penalty,
+        "C": 0.01,
+        "solver": solver,
+        "max_iter": 2000,
+        "class_weight": "balanced",
+    }
     if l1_ratio is not None:
         kwargs["l1_ratio"] = l1_ratio
     pipe = Pipeline([("scaler", StandardScaler()), ("logreg", LogisticRegression(**kwargs))])
     pipe.fit(X_fit[NUMERIC].fillna(0), y_fit)
     p = pipe.predict_proba(X_test[NUMERIC].fillna(0))[:, 1]
     coef = pipe.named_steps["logreg"].coef_.ravel()
-    reg_rows.append({
-        "penalty": penalty + (f" (l1_ratio={l1_ratio})" if l1_ratio is not None else ""),
-        "pr_auc": float(average_precision_score(y_test, p)),
-        "brier": float(brier_score_loss(y_test, p)),
-        "n_zero_coefs": int((np.abs(coef) < 1e-8).sum()),
-        "n_features": len(coef),
-    })
+    reg_rows.append(
+        {
+            "penalty": penalty + (f" (l1_ratio={l1_ratio})" if l1_ratio is not None else ""),
+            "pr_auc": float(average_precision_score(y_test, p)),
+            "brier": float(brier_score_loss(y_test, p)),
+            "n_zero_coefs": int((np.abs(coef) < 1e-8).sum()),
+            "n_features": len(coef),
+        }
+    )
 pd.DataFrame(reg_rows)
 
 # %% [markdown]

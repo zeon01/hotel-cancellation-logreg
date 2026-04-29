@@ -1,4 +1,9 @@
-"""Evaluation: discrimination, calibration, business-cost threshold selection, plots."""
+"""Evaluation: discrimination, calibration, threshold selection, bootstrap CIs,
+subgroup grid, cost-sensitivity surface, and figures.
+
+The figures and tables are written to ``reports/figures`` and ``models/`` so the README
+and notebooks consume the artefacts directly.
+"""
 
 from __future__ import annotations
 
@@ -24,6 +29,8 @@ from sklearn.metrics import (
 
 from cancellation_logreg.config import FIGURES_DIR, MODELS_DIR, PROCESSED_DIR
 from cancellation_logreg.plotting import set_style
+from cancellation_logreg.subgroup import subgroup_metrics
+from cancellation_logreg.uncertainty import cluster_bootstrap_metrics, summarise_ci
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +74,6 @@ def expected_cost(
     cost_fp: float = 5.0,
     cost_fn: float = 50.0,
 ) -> float:
-    """Expected per-row operational cost at ``threshold``."""
     pred = (y_proba >= threshold).astype(int)
     fp = ((pred == 1) & (y_true == 0)).sum()
     fn = ((pred == 0) & (y_true == 1)).sum()
@@ -81,15 +87,36 @@ def best_threshold(
     cost_fn: float = 50.0,
     grid: np.ndarray | None = None,
 ) -> float:
-    """Threshold minimising expected cost."""
     if grid is None:
         grid = np.linspace(0.05, 0.95, 91)
     costs = np.array([expected_cost(y_true, y_proba, t, cost_fp, cost_fn) for t in grid])
     return float(grid[int(np.argmin(costs))])
 
 
+def cost_sensitivity_grid(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+    fp_grid: tuple[float, ...] = (1.0, 2.5, 5.0, 10.0, 20.0),
+    fn_grid: tuple[float, ...] = (10.0, 25.0, 50.0, 100.0, 200.0),
+) -> pd.DataFrame:
+    rows = []
+    for fp in fp_grid:
+        for fn in fn_grid:
+            t = best_threshold(y_true, y_proba, fp, fn)
+            c = expected_cost(y_true, y_proba, t, fp, fn)
+            rows.append(
+                {
+                    "cost_fp": fp,
+                    "cost_fn": fn,
+                    "ratio": fn / fp,
+                    "best_threshold": t,
+                    "expected_cost": c,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def lift_table(y_true: np.ndarray, y_proba: np.ndarray, n_deciles: int = 10) -> pd.DataFrame:
-    """Lift in each decile of predicted-risk: positive rate vs. base rate."""
     df = pd.DataFrame({"y": y_true, "p": y_proba})
     df["decile"] = pd.qcut(df["p"], n_deciles, labels=False, duplicates="drop")
     base_rate = float(df["y"].mean())
@@ -103,6 +130,9 @@ def lift_table(y_true: np.ndarray, y_proba: np.ndarray, n_deciles: int = 10) -> 
     return out.sort_values("decile", ascending=False).reset_index(drop=True)
 
 
+# ---- figure savers ---------------------------------------------------------------
+
+
 def _save_pr_curve(y_true: np.ndarray, y_proba: np.ndarray, out: Path) -> None:
     p, r, _ = precision_recall_curve(y_true, y_proba)
     ap = average_precision_score(y_true, y_proba)
@@ -110,7 +140,7 @@ def _save_pr_curve(y_true: np.ndarray, y_proba: np.ndarray, out: Path) -> None:
     ax.plot(r, p, lw=2)
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
-    ax.set_title(f"Precision-Recall — PR-AUC = {ap:.3f}")
+    ax.set_title(f"Precision-Recall - PR-AUC = {ap:.3f}")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     fig.savefig(out)
@@ -125,7 +155,7 @@ def _save_roc_curve(y_true: np.ndarray, y_proba: np.ndarray, out: Path) -> None:
     ax.plot([0, 1], [0, 1], ls="--", lw=1, color="gray")
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title(f"ROC — AUC = {auc:.3f}")
+    ax.set_title(f"ROC - AUC = {auc:.3f}")
     fig.savefig(out)
     plt.close(fig)
 
@@ -137,7 +167,7 @@ def _save_calibration(y_true: np.ndarray, y_proba: np.ndarray, out: Path) -> Non
     ax.plot(table["mean_predicted"], table["mean_observed"], "o-", lw=2, label="Calibrated logreg")
     ax.set_xlabel("Mean predicted probability")
     ax.set_ylabel("Observed cancellation rate")
-    ax.set_title(f"Calibration — Brier = {brier(y_true, y_proba):.4f}")
+    ax.set_title(f"Calibration - Brier = {brier(y_true, y_proba):.4f}")
     ax.legend(loc="upper left")
     fig.savefig(out)
     plt.close(fig)
@@ -161,6 +191,22 @@ def _save_confusion(y_true: np.ndarray, y_pred: np.ndarray, out: Path) -> None:
     plt.close(fig)
 
 
+def _save_cost_surface(grid: pd.DataFrame, out: Path) -> None:
+    pivot_t = grid.pivot_table(index="cost_fn", columns="cost_fp", values="best_threshold")
+    pivot_c = grid.pivot_table(index="cost_fn", columns="cost_fp", values="expected_cost")
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    sns.heatmap(pivot_t, annot=True, fmt=".2f", cmap="viridis", ax=axes[0])
+    axes[0].set_title("Cost-optimal threshold")
+    axes[0].invert_yaxis()
+    sns.heatmap(pivot_c, annot=True, fmt=".2f", cmap="rocket_r", ax=axes[1])
+    axes[1].set_title("Expected cost / row")
+    axes[1].invert_yaxis()
+    fig.suptitle("Cost-sensitivity surface (cost_fp x cost_fn)")
+    fig.tight_layout()
+    fig.savefig(out)
+    plt.close(fig)
+
+
 def main() -> None:
     import logging as _log
 
@@ -180,7 +226,6 @@ def main() -> None:
     proba_val = model.predict_proba(X_val)[:, 1]
     proba_test = model.predict_proba(X_test)[:, 1]
 
-    # Pick threshold on val, evaluate on test.
     threshold = best_threshold(y_val.to_numpy(), proba_val)
     log.info("Cost-optimal threshold (val): %.3f", threshold)
 
@@ -197,8 +242,33 @@ def main() -> None:
     log.info("Test metrics: %s", metrics_test)
 
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
     pd.Series(metrics_test).to_csv(MODELS_DIR / "test_metrics.csv")
 
+    # ---- bootstrap CIs (cluster by month) -----------------------------------------
+    cluster_col = (
+        test["arrival_date"].dt.to_period("M").astype(str)
+        if "arrival_date" in test.columns
+        else pd.Series(np.zeros(len(test)))
+    )
+    log.info("Bootstrapping CIs (1000 replicates, cluster by month)...")
+    reps = cluster_bootstrap_metrics(
+        y_test.to_numpy(), proba_test, cluster_col.to_numpy(), n_boot=1000
+    )
+    summary = summarise_ci(reps)
+    summary.to_csv(MODELS_DIR / "metric_cis.csv", index=False)
+    log.info("CI summary:\n%s", summary.to_string(index=False))
+
+    # ---- subgroup grid -------------------------------------------------------------
+    sub = subgroup_metrics(test, proba_test)
+    sub.to_csv(MODELS_DIR / "subgroup_metrics.csv", index=False)
+    log.info("Subgroup metrics rows=%d", len(sub))
+
+    # ---- cost-sensitivity surface --------------------------------------------------
+    cost_grid = cost_sensitivity_grid(y_test.to_numpy(), proba_test)
+    cost_grid.to_csv(MODELS_DIR / "cost_surface.csv", index=False)
+
+    # ---- lift ---------------------------------------------------------------------
     lift = lift_table(y_test.to_numpy(), proba_test)
     lift.to_csv(MODELS_DIR / "test_lift.csv", index=False)
     log.info(
@@ -207,11 +277,12 @@ def main() -> None:
         lift.iloc[0]["positive_rate"],
     )
 
-    # Figures
+    # ---- figures ------------------------------------------------------------------
     _save_pr_curve(y_test.to_numpy(), proba_test, FIGURES_DIR / "03_pr_curve.png")
     _save_roc_curve(y_test.to_numpy(), proba_test, FIGURES_DIR / "03_roc_curve.png")
     _save_calibration(y_test.to_numpy(), proba_test, FIGURES_DIR / "03_calibration_curve.png")
     _save_confusion(y_test.to_numpy(), pred_test, FIGURES_DIR / "03_confusion_matrix.png")
+    _save_cost_surface(cost_grid, FIGURES_DIR / "05_cost_surface.png")
 
     log.info("Figures saved to %s", FIGURES_DIR)
 

@@ -51,29 +51,67 @@ make all
 
 ## Results
 
-Headline test metrics (May 2017 – August 2017, n=22,177 bookings):
+Headline test metrics (May 2017 – August 2017, n=22,177 bookings). Point estimates plus
+**1000-replicate cluster-bootstrap 95% CIs by arrival month** (`models/metric_cis.csv`):
 
-| Metric | Value | Notes |
-| ------ | ----- | ----- |
-| PR-AUC | **0.823** | Primary metric — 37% positive class makes this preferable to ROC-AUC |
-| ROC-AUC | 0.859 | |
-| Brier (calibrated) | **0.152** | Isotonic-calibrated via `CalibratedClassifierCV(cv=5)` |
-| Cost-optimal threshold | 0.14 | Selected on validation against `cost_fp=$5, cost_fn=$50` |
-| Precision @ threshold | 0.511 | Half of flagged bookings actually cancel |
-| Recall @ threshold | **0.973** | Catches 97% of cancellations |
-| F1 @ threshold | 0.670 | |
-| Top-decile lift | **2.44x** | 99.1% of the top decile are actual cancellations |
-| Expected cost / row | $2.44 | Down from $4.62 at the naive 0.5 threshold |
+| Metric | Point | 95% CI | Notes |
+| ------ | ----- | ------ | ----- |
+| **PR-AUC** | **0.823** | [0.747, 0.866] | Primary metric — 37% positive class |
+| ROC-AUC | 0.859 | [0.833, 0.878] | |
+| **Brier (calibrated)** | **0.152** | [0.142, 0.163] | Isotonic via `CalibratedClassifierCV(cv=5)` |
+| **Top-decile lift** | **2.36x** | [2.17, 2.45] | 99% of the top decile actually cancel |
+
+At the cost-optimal threshold (selected on validation against `cost_fp=$5, cost_fn=$50`):
+
+| Metric | Value |
+| ------ | ----- |
+| Threshold | 0.14 |
+| Precision | 0.511 |
+| Recall | **0.973** |
+| F1 | 0.670 |
+| Expected cost / row | **$2.44** (vs $4.62 at naive 0.5) |
 
 Best `C` from `TimeSeriesSplit(n_splits=5)` CV: **0.01** (heaviest regularisation in the
-grid; sklearn's `class_weight='balanced'` already absorbs much of the loss landscape).
+grid; `class_weight='balanced'` already absorbs much of the imbalance).
 
-**Business reading.** At the cost-optimal threshold of 0.14, the model would surface
-the riskiest ~50% of bookings as candidates for Supply-Ops attention while missing only
-~3% of cancellations. The top decile (10% of inventory) carries 24x the cancellation
-density of the bottom decile — that is the segment where allotment-release timing,
-deposit-policy targeting, and supplier-confirmation calls have the highest marginal
-return.
+**Why PR-AUC's CI is wider than ROC-AUC's** — the cluster-bootstrap honours monthly
+correlation, and PR-AUC is more sensitive than ROC-AUC to the per-month positive-class
+mix. The wide CI is the honest, reproducible signal that **monthly performance is not
+flat** — a Supply-Ops deployment would need monthly recalibration, not a single ship-it
+threshold. See subgroup grid below for the segment-level companion of this finding.
+
+### Subgroup performance
+
+`models/subgroup_metrics.csv` (17 rows). Highlights:
+
+| Subgroup | n | Positive rate | PR-AUC | Brier |
+| -------- | -- | ------------- | ------ | ----- |
+| OVERALL | 22,177 | 0.406 | 0.823 | 0.152 |
+| `hotel = City Hotel` | 15,191 | 0.426 | **0.840** | 0.153 |
+| `hotel = Resort Hotel` | 6,986 | 0.362 | 0.799 | 0.149 |
+| `market_segment = Groups` | 2,317 | 0.677 | **0.994** | **0.049** |
+| `market_segment = Online TA` | 13,074 | 0.427 | 0.702 | 0.196 |
+| `market_segment = Aviation` | 71 | 0.225 | 0.487 | 0.169 |
+| `lead_time = 0–7d` | 2,227 | 0.111 | 0.341 | 0.089 |
+| `lead_time = 181d+` | 6,531 | 0.486 | **0.888** | 0.148 |
+
+**Reading these:** the model is **excellent on long-lead and Group bookings** (where
+cancellation is structural and predictable) and **noticeably worse on short-lead Online
+TA** — the segment where Supply Ops actually wants the most help. A production
+deployment needs a `market_segment`-aware calibrator (or a separate Online-TA model);
+that's the kind of segment-level deficit a global average hides.
+
+### Business reading
+
+At the cost-optimal threshold of 0.14, the model would surface the riskiest ~50% of
+bookings as candidates for Supply-Ops attention while missing only ~3% of cancellations.
+The top decile (10% of inventory) carries 2.36x the base cancellation rate — that is the
+segment where allotment-release timing, deposit-policy targeting, and supplier-
+confirmation calls have the highest marginal return.
+
+The cost surface (`reports/figures/05_cost_surface.png`) shows how the optimal
+threshold slides from ~0.4 to ~0.07 as the FP:FN ratio swings from 1:5 to 1:200. A
+deployed model needs that surface, not a single threshold.
 
 ## Limitations & honest caveats
 

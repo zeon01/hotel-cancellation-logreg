@@ -14,9 +14,9 @@
 # ---
 
 # %% [markdown]
-# # 99 - Interview-grade Rigor Appendix
+# # 99 - Extended Methodology Appendix
 #
-# Each section is a senior-DS-panel question, answered with a defensible methodology
+# Each section is a senior-DS-level question, answered with a defensible methodology
 # and a named alternative.
 #
 # All cells consume artefacts produced by `make all` (loaded from `../models/` and
@@ -110,7 +110,7 @@ cis[["metric", "display", "n"]]
 # %% [markdown]
 # ## C. Statistical vs practical significance
 #
-# At n=78,590 train rows, even tiny effects reach p<0.001. The interview-grade lens
+# At n=78,590 train rows, even tiny effects reach p<0.001. The deep-dive lens
 # is to look at the *odds ratio* (practical) not just the p-value (statistical).
 # See `top_coefficients.csv` for the inferential statsmodels Logit table; the
 # `04_top_coefficients_forest.png` figure puts these on a log-OR scale with HC3 CIs.

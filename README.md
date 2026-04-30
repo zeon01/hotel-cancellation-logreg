@@ -115,7 +115,7 @@ deployed model needs that surface, not a single threshold.
 
 ## Limitations & honest caveats
 
-- Data is from two Portuguese hotels (2015–17). Generalisation to APAC / Agoda's typical market is unproven.
+- Data is from two Portuguese hotels (2015–17). Generalisation to an APAC OTA's typical market is unproven.
 - `country` retains some leakage even after careful handling — see methodology doc.
 - Cancellation behaviour 2015–17 predates COVID-era and post-COVID booking patterns (long lead times collapsed, then rebounded).
 - Group bookings inflate duplicate rows; the chosen treatment (feature-encode rather than drop) is one defensible option among several.
@@ -129,9 +129,9 @@ deployed model needs that surface, not a single threshold.
 4. Add real-time supplier-side signals (channel-manager error rate, parity violations, rate-push success) — outside the public dataset, but the modelling shape is unchanged.
 5. Connect to the experimentation platform: every threshold choice, calibration method, and segment cut becomes an A/B-tested decision rather than an offline default.
 
-## Appendix: interview-grade rigor
+## Appendix: extended methodology
 
-See `notebooks/99_appendix_interview_grade.ipynb`. Contents:
+See `notebooks/99_appendix_extended_rigor.ipynb`. Contents:
 
 - Leakage audit table (every column, leakage status, justification).
 - VIF before/after de-collinearisation.
@@ -158,7 +158,7 @@ hotel-cancellation-logreg/
 │   ├── 02_preprocessing.ipynb
 │   ├── 03_modeling.ipynb
 │   ├── 04_diagnostics.ipynb
-│   └── 99_appendix_interview_grade.ipynb
+│   └── 99_appendix_extended_rigor.ipynb
 ├── src/cancellation_logreg/
 │   ├── config.py            # paths, seeds, column constants
 │   ├── data.py              # download, load_raw, validate_schema

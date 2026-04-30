@@ -1,6 +1,6 @@
 # Methodology — hotel-cancellation-logreg
 
-This document records every modelling decision, the chosen option, and the rejected alternative. Each section is written so it can be paraphrased verbatim in an interview.
+This document records every modelling decision, the chosen option, and the rejected alternative. Each section is written so it can be paraphrased in a technical review.
 
 ## 1. Dataset and licensing
 
@@ -53,7 +53,7 @@ The dataset is ~37% positive class. **Not severe.** The community consensus in 2
 - **Validation:** 2017-01 to 2017-04.
 - **Test:** 2017-05 to 2017-08.
 
-**Rationale (write this verbatim in the README if asked):** Antonio et al.'s follow-up paper (Data Science Journal, 2019) explicitly identifies stratified random splits as inflating reported performance versus a time-based split. A cancellation model deployed in production sees future bookings — train on past, validate on near future, test on further future. This is also how Agoda's experimentation framework conceives of generalisation.
+**Rationale (write this verbatim in the README if asked):** Antonio et al.'s follow-up paper (Data Science Journal, 2019) explicitly identifies stratified random splits as inflating reported performance versus a time-based split. A cancellation model deployed in production sees future bookings — train on past, validate on near future, test on further future. This is also how a typical OTA experimentation framework conceives of generalisation.
 
 **On the training set:** `TimeSeriesSplit` 5-fold for hyperparameter CV. Stratified `KFold` is run as an appendix ablation; the optimism gap is reported.
 
